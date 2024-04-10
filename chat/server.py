@@ -5,11 +5,13 @@ host = '127.0.0.1' # Dirección IP del servidor
 port = 55555 # Puerto del servidor
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Crear un objeto socket para el servidor
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Configurar el socket para reutilizar la dirección
 server.bind((host, port)) # Enlazar el servidor al host y puerto especificado
 server.listen() # Escuchar conexiones entrantes
 
 clients = [] # Lista de clientes conectados
 usernames = [] # Lista de nombres de usuario de los clientes
+rooms = [] # Lista de salas de chat
 
 # Función para transmitir mensajes a todos los clientes
 def broadcast(message):
@@ -44,13 +46,19 @@ def receive():
 
         # Solicitar y almacenar el nombre de usuario del cliente
         client.send('NICK'.encode('utf-8'))
+
         username = client.recv(1024).decode('utf-8')
         usernames.append(username)
         clients.append(client)
 
+        client.send('ROOM'.encode('utf-8'))
+        room = client.recv(1024).decode('utf-8')
+        rooms.append(room)
+        # clients.append(client)
+
         # Anunciar la conexión del cliente a todos los clientes
         print(f"El nombre de usuario del cliente es {username}")
-        broadcast(f'{username} se ha unido al chat.'.encode('utf-8'))
+        broadcast(f'{username.upper()} se ha unido al chat.'.encode('utf-8'))
 
         client.send('Conectado al servidor.'.encode('utf-8'))
 
