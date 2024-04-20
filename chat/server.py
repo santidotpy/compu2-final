@@ -21,19 +21,21 @@ def handle_client(client):
     while True:
         try:
             # Recibir mensaje del cliente
-            message = client.recv(1024)
-            # Transmitir mensaje a todos los clientes
-            broadcast(message)
+            message = client.recv(1024).decode('utf-8')
+            if message == 'EXIT':
+                raise Exception("Error al recibir mensaje.")
+            else:
+                # Transmitir mensaje a todos los clientes
+                broadcast(message.encode('utf-8'))
         except:
-            # Eliminar y cerrar la conexión con el cliente
+            # Eliminar y cerrar la conexión con el cliente en caso de excepción
             index = clients.index(client)
-            clients.remove(client)
-            client.close()
             username = usernames[index]
             broadcast(f'{username} ha abandonado el chat.'.encode('utf-8'))
             usernames.remove(username)
+            clients.remove(client)
+            client.close()
             break
-
 
 # Función principal para aceptar conexiones de clientes
 def receive():
@@ -60,3 +62,6 @@ def receive():
 
 print("Servidor de chat iniciado. Esperando conexiones...")
 receive()
+
+
+
