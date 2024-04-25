@@ -2,6 +2,7 @@ import threading
 import socket
 import argparse
 from datetime import datetime
+import sys
 
 # Firestore
 import firebase_admin
@@ -13,19 +14,21 @@ firebase_admin.initialize_app(cred)
 
 clients = [] # Lista de clientes conectados
 usernames = [] # Lista de nombres de usuario de los clientes
+messages = [] # Lista de mensajes de chat
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Chat server")
     parser.add_argument("host", nargs='?', type=str, help="Server host", default="127.0.0.1")
     parser.add_argument("port", nargs='?', type=int, help="Server port", default=55555)
-    parser.add_argument("usedb", nargs='?', type=bool, help="Bool to use db", default=False)
+    parser.add_argument("usedb", nargs='?', type=bool, help="Bool to use db", default=True)
     return parser.parse_args()
 
 
 def get_author_and_message(message):
-    author = message.split(':')[0]
-    message = message.split(':')[1]
+    parts = message.split(':', 1)  # Dividir en dos partes máximo
+    author = parts[0]
+    message = parts[1].strip()  # Eliminar espacios al principio y al final
     return author, message
 
 def get_message_data(message):
@@ -35,6 +38,33 @@ def get_message_data(message):
         "message": message,
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
+
+def get_messages_data(author, messages):
+    only_messages = [get_author_and_message(message.decode('utf-8'))[1] for message in messages]
+    data = {
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        # "messages": [get_message_data(message) for message in messages],
+        # "messages":[ message.decode('utf-8') for message in messages],
+        "messages": only_messages,
+        "author": author
+    }
+    return data
+
+    # return [get_message_data(message) for message in messages]
+
+# def otraManeraDeLoDeArriba(author, messages):
+#     data = []
+#     data.append({
+#         "author": author,
+#         "messages": messages,
+#         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#     })
+#     return data
+
+def save_messages(author, messages):
+    doc_ref = db.collection("chatCollection").document()
+    doc_ref.set(get_messages_data(author, messages))
+
 
 def save_message(message):
     doc_ref = db.collection("chatCollection").document()
@@ -52,17 +82,30 @@ def handle_client(client):
         try:
             # Recibir mensaje del cliente
             message = client.recv(1024)
-            if use_db: save_message(message.decode('utf-8'))
+            author, only_message = get_author_and_message(message.decode('utf-8'))
+            messages.append(message)
+            # if use_db: save_message(message.decode('utf-8'))
             # Transmitir mensaje a todos los clientes
             broadcast(message)
+            print(only_message)
+            print(only_message == 'exit')
+            if only_message == 'EXIT':
+                raise Exception("Cliente desconectado.")
         except:
             # Eliminar y cerrar la conexión con el cliente
             index = clients.index(client)
             clients.remove(client)
             client.close()
             username = usernames[index]
+            print(f"Mensajes enviados por {username} eliminados. {messages}")
             broadcast(f'{username} ha abandonado el chat.'.encode('utf-8'))
             usernames.remove(username)
+
+            if only_message == 'EXIT':
+                if use_db: save_messages(author, messages)
+                broadcast(b'Server is shutting down.')
+                server.close()
+                sys.exit("Server closed by admin.")
             break
 
 
