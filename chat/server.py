@@ -11,18 +11,8 @@ from firebase_admin import firestore
 cred = credentials.Certificate("../credentials.json")
 firebase_admin.initialize_app(cred)
 
-# from firestore_demo import get_author_and_message, save_message
-
-# host = '127.0.0.1' # Dirección IP del servidor
-# port = 55555 # Puerto del servidor
-
-# server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Crear un objeto socket para el servidor
-# server.bind((host, port)) # Enlazar el servidor al host y puerto especificado
-# server.listen() # Escuchar conexiones entrantes
-
 clients = [] # Lista de clientes conectados
 usernames = [] # Lista de nombres de usuario de los clientes
-# data = {}
 
 
 def parse_arguments():
