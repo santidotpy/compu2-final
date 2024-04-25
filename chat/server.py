@@ -1,15 +1,55 @@
 import threading
 import socket
+import argparse
+from datetime import datetime
 
-host = '127.0.0.1' # Dirección IP del servidor
-port = 55555 # Puerto del servidor
+# Firestore
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Crear un objeto socket para el servidor
-server.bind((host, port)) # Enlazar el servidor al host y puerto especificado
-server.listen() # Escuchar conexiones entrantes
+cred = credentials.Certificate("../credentials.json")
+firebase_admin.initialize_app(cred)
+
+# from firestore_demo import get_author_and_message, save_message
+
+# host = '127.0.0.1' # Dirección IP del servidor
+# port = 55555 # Puerto del servidor
+
+# server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Crear un objeto socket para el servidor
+# server.bind((host, port)) # Enlazar el servidor al host y puerto especificado
+# server.listen() # Escuchar conexiones entrantes
 
 clients = [] # Lista de clientes conectados
 usernames = [] # Lista de nombres de usuario de los clientes
+# data = {}
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Chat server")
+    parser.add_argument("host", nargs='?', type=str, help="Server host", default="127.0.0.1")
+    parser.add_argument("port", nargs='?', type=int, help="Server port", default=55555)
+    parser.add_argument("usedb", nargs='?', type=bool, help="Bool to use db", default=False)
+    return parser.parse_args()
+
+
+def get_author_and_message(message):
+    author = message.split(':')[0]
+    message = message.split(':')[1]
+    return author, message
+
+def get_message_data(message):
+    author, message = get_author_and_message(message)
+    return {
+        "author": author,
+        "message": message,
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+def save_message(message):
+    doc_ref = db.collection("chatCollection").document()
+    doc_ref.set(get_message_data(message))
+
 
 # Función para transmitir mensajes a todos los clientes
 def broadcast(message):
@@ -22,6 +62,7 @@ def handle_client(client):
         try:
             # Recibir mensaje del cliente
             message = client.recv(1024)
+            if use_db: save_message(message.decode('utf-8'))
             # Transmitir mensaje a todos los clientes
             broadcast(message)
         except:
@@ -58,5 +99,23 @@ def receive():
         thread = threading.Thread(target=handle_client, args=(client,))
         thread.start()
 
-print("Servidor de chat iniciado. Esperando conexiones...")
-receive()
+if __name__ == '__main__':
+    args = parse_arguments()
+    host = args.host
+    port = args.port
+    use_db = args.usedb
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Crear un objeto socket para el servidor
+    server.bind((host, port)) # Enlazar el servidor al host y puerto especificado
+    server.listen() # Escuchar conexiones entrantes
+
+    # Initialize Firestore client if the 'use_db' flag is set to True
+    if use_db: 
+        try:
+            print("Firestore client initialized.")
+            db = firestore.client()
+        except:
+            print("Error al inicializar el cliente de Firestore.")
+            use_db = False
+
+    print("Servidor de chat iniciado. Esperando conexiones...")
+    receive()
