@@ -2,34 +2,33 @@ import threading
 import socket
 import argparse
 from datetime import datetime
-import sys
+import os
 
 # Firestore
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 
-cred = credentials.Certificate("../credentials.json")
+cred = credentials.Certificate("../credentials.json")  # Adjust the path as necessary
 firebase_admin.initialize_app(cred)
 
-clients = [] # Lista de clientes conectados
-usernames = [] # Lista de nombres de usuario de los clientes
-messages = [] # Lista de mensajes de chat
-
+clients = []  # List of connected clients
+usernames = []  # List of client usernames
+messages = []  # List of chat messages
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Chat server")
-    # parser.add_argument("host", nargs='?', type=str, help="Server host", default="127.0.0.1") # LOCALHOST
     parser.add_argument("host", nargs='?', type=str, help="Server host", default="0.0.0.0")
     parser.add_argument("port", nargs='?', type=int, help="Server port", default=55555)
-    parser.add_argument("usedb", nargs='?', type=bool, help="Bool to use db", default=True)
+    parser.add_argument("--usedb", type=lambda s: s.lower() in ['true', 't', 'yes', '1'], help="Bool to use db", default=True)
     return parser.parse_args()
 
-
 def get_author_and_message(message):
-    parts = message.split(':', 1)  # Dividir en dos partes máximo
+    parts = message.split(':', 1)  # Split into a maximum of two parts
+    if len(parts) < 2:
+        return "", message  # Return empty author if message does not contain ':'
     author = parts[0]
-    message = parts[1].strip()  # Eliminar espacios al principio y al final
+    message = parts[1].strip()  # Strip leading and trailing spaces
     return author, message
 
 def get_message_data(message):
@@ -49,64 +48,67 @@ def get_messages_data(author, messages):
     }
     return data
 
-
 def save_messages(author, messages):
     doc_ref = db.collection("chatCollection").document()
     doc_ref.set(get_messages_data(author, messages))
 
-
-# Función para transmitir mensajes a todos los clientes
 def broadcast(message):
     for client in clients:
         client.send(message)
 
-# Función para manejar las conexiones de los clientes
 def handle_client(client):
     while True:
         try:
-            # Recibir mensaje del cliente
             message = client.recv(1024)
+            if not message:
+                raise Exception("Received empty message")
+            
             author, only_message = get_author_and_message(message.decode('utf-8'))
-            messages.append(message)
-            # if use_db: save_message(message.decode('utf-8'))
-            # Transmitir mensaje a todos los clientes
-            broadcast(message)
-            print(only_message)
-            print(only_message == 'EXIT')
-            if only_message == 'EXIT': raise Exception("Cliente desconectado.")
-        except:
-            # Eliminar y cerrar la conexión con el cliente
+            print(f"Author: {author}, Message: {only_message}")
+            if message.decode('utf-8').startswith('IMAGE:'):
+                author = message.decode('utf-8').split(':')[1]
+                with open('received_image.jpg', 'wb') as file:  # Adjust the path as necessary
+                    while True:
+                        image_data = client.recv(2048)
+                        if b'ENDIMG' in image_data:
+                            file.write(image_data.replace(b'ENDIMG', b''))
+                            break
+                        file.write(image_data)
+                broadcast(f'{author} ha enviado una imagen.'.encode('utf-8'))
+            else:
+                messages.append(message)
+                broadcast(message)
+                
+            if only_message == 'EXIT':
+                raise Exception(f"{author} se ha desconectado.")
+                
+        except Exception as e:
+            print(f"Server: {e}")
             index = clients.index(client)
             clients.remove(client)
             client.close()
-            username = usernames[index]
-            # print(f"Mensajes enviados por {username} eliminados. {messages}")
-            broadcast(f'{username} ha abandonado el chat.'.encode('utf-8'))
-            usernames.remove(username)
-            if use_db: save_messages(author, messages)
+            if index < len(usernames):
+                username = usernames.pop(index)
+                broadcast(f'{username} ha abandonado el chat.'.encode('utf-8'))
+            if use_db:
+                save_messages(author, messages)
             break
 
-
-# Función principal para aceptar conexiones de clientes
 def receive():
     while True:
-        # Aceptar la conexión del cliente
         client, address = server.accept()
         print(f"Conexión establecida con {str(address)}")
 
-        # Solicitar y almacenar el nombre de usuario del cliente
         client.send('NICK'.encode('utf-8'))
         username = client.recv(1024).decode('utf-8')
         usernames.append(username)
         clients.append(client)
 
-        # Anunciar la conexión del cliente a todos los clientes
         print(f"El nombre de usuario del cliente es {username}")
         broadcast(f'{username} se ha unido al chat.'.encode('utf-8'))
 
         client.send('Conectado al servidor.'.encode('utf-8'))
 
-        # Iniciar un hilo para manejar la conexión del cliente
         thread = threading.Thread(target=handle_client, args=(client,))
         thread.start()
 
@@ -115,17 +117,16 @@ if __name__ == '__main__':
     host = args.host
     port = args.port
     use_db = args.usedb
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Crear un objeto socket para el servidor
-    server.bind((host, port)) # Enlazar el servidor al host y puerto especificado
-    server.listen() # Escuchar conexiones entrantes
-
-    # Initialize Firestore client if the 'use_db' flag is set to True
-    if use_db: 
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((host, port))
+    server.listen()
+    print(use_db)
+    if use_db:
         try:
             print("Firestore client initialized.")
             db = firestore.client()
-        except:
-            print("Error al inicializar el cliente de Firestore.")
+        except Exception as e:
+            print(f"Error al inicializar el cliente de Firestore: {e}")
             use_db = False
 
     print("Servidor de chat iniciado. Esperando conexiones...")
