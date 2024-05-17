@@ -60,7 +60,6 @@ def send(client, username):
         elif message.strip() == "":  # Ignore empty messages
             continue
         elif message == "/img":
-            # client.send(f"IMAGE".encode('utf-8'))
             try:
                 send_image(client, username)
             except:
