@@ -67,7 +67,7 @@ def handle_client(client):
             print(f"Author: {author}, Message: {only_message}")
             if message.decode('utf-8').startswith('IMAGE:'):
                 author = message.decode('utf-8').split(':')[1]
-                with open('received_image.jpg', 'wb') as file:  # Adjust the path as necessary
+                with open('../received_images/received_image.jpg', 'wb') as file:  # Adjust the path as necessary
                     while True:
                         image_data = client.recv(2048)
                         if b'ENDIMG' in image_data:
