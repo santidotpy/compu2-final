@@ -2,6 +2,7 @@ import threading
 import socket
 import argparse
 from datetime import datetime
+import base64
 import os
 
 # Firestore
@@ -23,6 +24,10 @@ def parse_arguments():
     parser.add_argument("--usedb", type=lambda s: s.lower() in ['true', 't', 'yes', '1'], help="Bool to use db", default=True)
     return parser.parse_args()
 
+def img_to_base64(img_path):
+    with open(img_path, "rb") as img_file:
+        return base64.b64encode(img_file.read())
+
 def get_author_and_message(message):
     parts = message.split(':', 1)  # Split into a maximum of two parts
     if len(parts) < 2:
@@ -41,6 +46,9 @@ def get_message_data(message):
 
 def get_messages_data(author, messages):
     only_messages = [get_author_and_message(message.decode('utf-8'))[1] for message in messages]
+    img_base64 = img_to_base64('../received_images/received_image.jpg')
+    if os.path.exists('../received_images/received_image.jpg'):
+        only_messages.append(f'IMAGE: {img_base64}')
     data = {
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "messages": only_messages,
@@ -67,7 +75,9 @@ def handle_client(client):
             print(f"Author: {author}, Message: {only_message}")
             if message.decode('utf-8').startswith('IMAGE:'):
                 author = message.decode('utf-8').split(':')[1]
-                with open('../received_images/received_image.jpg', 'wb') as file:  # Adjust the path as necessary
+                image_path = '../received_images/received_image.jpg'  # Adjust the path as necessary
+                os.makedirs(os.path.dirname(image_path), exist_ok=True)  # Create the directory if it doesn't exist
+                with open(image_path, 'wb') as file:
                     while True:
                         image_data = client.recv(2048)
                         if b'ENDIMG' in image_data:
@@ -129,5 +139,6 @@ if __name__ == '__main__':
             print(f"Error al inicializar el cliente de Firestore: {e}")
             use_db = False
 
+    print(f"Servidor de chat iniciado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.")
     print("Servidor de chat iniciado. Esperando conexiones...")
     receive()
