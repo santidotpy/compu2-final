@@ -3,6 +3,10 @@
 
 ## Chat en tiempo real
 
+### Instalación de dependencias
+```bash
+pip3 install -r requirements.txt
+```
 
 ### Correr el servidor
 ```bash
