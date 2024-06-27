@@ -29,7 +29,22 @@ docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ser
 ```
 
 ### Firebase 🔥
-Para correr el servidor con Firebase, se debe tener un archivo `credentials.json` con las credenciales de Firebase. El mismo se consigue en Firebase.
+Para correr el servidor con Firebase, se debe tener un archivo `credentials.json` con las credenciales de Firebase. El mismo se consigue en Firebase. Dicho archivo tiene el siguiente formato:
+```json
+  {
+    "type": "EXAMPLE",
+    "project_id": "EXAMPLE",
+    "private_key_id": "EXAMPLE",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nEXAMPLE\n-----END PRIVATE KEY-----\n",
+    "client_email": "EXAMPLE",
+    "client_id": "0123456789",
+    "auth_uri": "EXAMPLE",
+    "token_uri": "EXAMPLE",
+    "auth_provider_x509_cert_url": "EXAMPLE",
+    "client_x509_cert_url": "EXAMPLE",
+    "universe_domain": "EXAMPLE"
+  }
+```
 
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![Docker](https://img.shields.io/badge/docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
