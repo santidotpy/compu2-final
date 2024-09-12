@@ -1,3 +1,4 @@
+# server.py
 import threading
 import socket
 import argparse
@@ -6,6 +7,12 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import logging
+
+import multiprocessing
+import time
+
+from utils.utils import authenticate
+
 
 class ChatServer:
     def __init__(self, host="0.0.0.0", port=55555, use_db=True):
@@ -19,6 +26,13 @@ class ChatServer:
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind((self.host, self.port))
         self.server.listen()
+
+        self.auth_queue = multiprocessing.Queue()
+        self.auth_response_queue = multiprocessing.Queue()
+        
+        # Start the authentication process
+        self.auth_process = multiprocessing.Process(target=authenticate, args=(self.auth_queue, self.auth_response_queue))
+        self.auth_process.start()
 
         logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger(__name__)
@@ -40,6 +54,31 @@ class ChatServer:
     def get_author_and_message(message):
         parts = message.split(':', 1)
         return (parts[0], parts[1].strip()) if len(parts) > 1 else ("", message)
+    
+    def authenticate_client(self, client):
+        """Handle authentication of the client."""
+        try:
+            client.send('AUTH'.encode('utf-8'))  # Request authentication info from the client
+            auth_data = client.recv(1024).decode('utf-8').split(':')
+            print("AUTH DATA", auth_data)
+            if len(auth_data) == 2:
+                username, password = auth_data
+                self.auth_queue.put((username, password))
+                result = self.auth_response_queue.get()  # Wait for auth result
+
+                if result[1]:  # Authentication successful
+                    self.logger.info(f"Client {username} authenticated successfully")
+                    return username
+                else:
+                    client.send('Authentication failed.'.encode('utf-8'))
+                    client.close()
+            else:
+                client.send('Invalid authentication data.'.encode('utf-8'))
+                client.close()
+        except Exception as e:
+            self.logger.error(f"Error during authentication: {e}")
+            client.close()
+        return None
 
     def get_messages_data(self, author):
         only_messages = [self.get_author_and_message(m.decode('utf-8'))[1] for m in self.messages]
@@ -122,9 +161,10 @@ class ChatServer:
             try:
                 client, address = self.server.accept()
                 self.logger.info(f"Connection established with {address}")
-
-                client.send('NICK'.encode('utf-8'))
-                username = client.recv(1024).decode('utf-8')
+                
+                username = self.authenticate_client(client)
+                if not username:
+                    continue  # Skip the client if authentication failed
 
                 with self.lock:
                     self.usernames[client] = username
@@ -138,6 +178,11 @@ class ChatServer:
             except Exception as e:
                 self.logger.error(f"Error accepting client connection: {e}")
 
+    def shutdown(self):
+        """Ensure the authentication process is terminated."""
+        self.auth_queue.put('STOP')  # Stop the authentication process
+        self.auth_process.join()  # Wait for the process to finish
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Chat server")
     parser.add_argument("host", nargs='?', type=str, help="Server host", default="0.0.0.0")
@@ -149,3 +194,8 @@ if __name__ == '__main__':
     chat_server.logger.info(f"Server running on {args.host}:{args.port}")
     chat_server.logger.info(f"Using Firestore: {args.usedb}")
     chat_server.receive()
+
+
+# TODO ipv6 getaddrinfo lado del server
+# QUEUES? concurrecia
+# autenticacion

@@ -1,19 +1,16 @@
+# client.py
 import threading
 import socket
 import argparse
-import random
 import logging
 import sys
 
-def get_random_username():
-    adjectives = ['happy', 'sad', 'angry', 'sleepy', 'hungry', 'thirsty', 'bored', 'excited', 'tired', 'silly']
-    nouns = ['cat', 'dog', 'bird', 'fish', 'rabbit', 'hamster', 'turtle', 'parrot', 'snake', 'lizard']
-    return f'{random.choice(adjectives).capitalize()} {random.choice(nouns).capitalize()}'
+from utils.utils import get_random_username
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Chat client")
     parser.add_argument("-a", "--address", type=str, help="Server address", default="127.0.0.1")
-    parser.add_argument("-ip6", "--ipv6", action="store_true", help="Use IPv6")
+    parser.add_argument("-ip6", "--ipv6", action="store_true", help="Use IPv6", default=False)
     parser.add_argument("-p", "--port", type=int, help="Server port", default=55555)
     parser.add_argument("-u", "--username", type=str, help="Username", default=get_random_username())
     return parser.parse_args()
@@ -32,7 +29,7 @@ class ChatClient:
 
     def connect(self):
         try:
-            self.client = socket.socket(socket.AF_INET6 if self.ipv6 else socket.AF_INET, socket.SOCK_STREAM)
+            self.client = socket.socket(socket.AF_INET6 if self.ipv6 else socket.AF_INET, socket.SOCK_STREAM) #automatizar
             self.client.connect((self.address, self.port))
             self.logger.info(f"Connected to server at {self.address}:{self.port}")
         except Exception as e:
@@ -47,8 +44,12 @@ class ChatClient:
                     self.logger.info("Server closed the connection.")
                     self.shutdown_event.set()
                     break
-                if message == 'NICK':
-                    self.client.send(self.username.encode('utf-8'))
+                
+                if message == 'AUTH':  # request de Autenticacion del server
+                    # simple autenticacion
+                    username = input("Enter username: ")
+                    password = input("Enter password: ")
+                    self.client.send(f"{username}:{password}".encode('utf-8'))
                 else:
                     print(message)
             except Exception as e:
@@ -65,6 +66,7 @@ class ChatClient:
                     self.logger.info("Sending EXIT command to server.")
                     self.client.send("EXIT".encode('utf-8'))
                     self.shutdown_event.set()
+                    self.shutdown()  # Cierra el cliente de inmediato
                     break
                 elif message.strip():
                     self.client.send(f'{self.username}: {message}'.encode('utf-8'))
