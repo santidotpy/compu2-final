@@ -1,3 +1,6 @@
 credentials.json
 
 __pycache__/
+
+/ignore
+testing_users.py
