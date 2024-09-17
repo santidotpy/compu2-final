@@ -1,12 +1,10 @@
 # utils.py
 import bcrypt
 import random
+from utils.testing_users import users_db
 
 def authenticate(queue, response_queue):
-    """Proceso simple de autenticación de usuarios."""
-    users_db = {"user1": "$2b$12$RMnLBi9JqPwyJjhbHSJYzePcHfTWPYed/re4wrZ7fnvuY78uqgWp6", 
-                "user2": "password2"}  # Dummy users
-    
+    """Proceso simple de autenticación de usuarios."""    
     while True:
         data = queue.get()
         if data == 'STOP':
@@ -14,7 +12,7 @@ def authenticate(queue, response_queue):
         
         username, password = data
 
-        if username in users_db and users_db[username] == password:
+        if username in users_db and verify_password(users_db[username], password):
             response_queue.put((username, True))
         else:
             response_queue.put((username, False))
