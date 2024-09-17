@@ -48,6 +48,7 @@ class ChatClient:
                 if message == 'AUTH':  # request de Autenticacion del server
                     # simple autenticacion
                     username = input("Enter username: ")
+                    self.username = username
                     password = input("Enter password: ")
                     self.client.send(f"{username}:{password}".encode('utf-8'))
                 else:
