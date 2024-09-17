@@ -15,7 +15,7 @@ from utils.utils import authenticate
 
 
 class ChatServer:
-    def __init__(self, host="0.0.0.0", port=55555, use_db=True):
+    def __init__(self, host="::", port=55555, use_db=True):
         self.host = host
         self.port = port
         self.use_db = use_db
@@ -23,14 +23,30 @@ class ChatServer:
         self.usernames = {}
         self.messages = []
         self.lock = threading.Lock()
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.bind((self.host, self.port))
-        self.server.listen()
+
+        # información de la dirección, para IPv4 como para IPv6
+        addr_info = socket.getaddrinfo(self.host, self.port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+
+        # uso la primera dirección encontrada que funcione
+        for res in addr_info:
+            af, socktype, proto, canonname, sa = res # address family, socket type, protocol, canonical name, socket address
+            try:
+                self.server = socket.socket(af, socktype, proto)
+                self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self.server.bind(sa)
+                self.server.listen()
+                break  # salgo del bucle si esta todo ok
+            except socket.error as msg:
+                self.server = None
+                continue
+
+        if self.server is None:
+            raise Exception(f"Could not open socket for {host}:{port}")
 
         self.auth_queue = multiprocessing.Queue()
         self.auth_response_queue = multiprocessing.Queue()
-        
-        # Start the authentication process
+
+        # Inicia el proceso de autenticación
         self.auth_process = multiprocessing.Process(target=authenticate, args=(self.auth_queue, self.auth_response_queue))
         self.auth_process.start()
 
@@ -58,15 +74,15 @@ class ChatServer:
     def authenticate_client(self, client):
         """Handle authentication of the client."""
         try:
-            client.send('AUTH'.encode('utf-8'))  # Request authentication info from the client
+            client.send('AUTH'.encode('utf-8'))  # request authentication info from the client
             auth_data = client.recv(1024).decode('utf-8').split(':')
             print("AUTH DATA", auth_data)
             if len(auth_data) == 2:
                 username, password = auth_data
                 self.auth_queue.put((username, password))
-                result = self.auth_response_queue.get()  # Wait for auth result
+                result = self.auth_response_queue.get()  # wait auth result
 
-                if result[1]:  # Authentication successful
+                if result[1]:  # authentication ok
                     self.logger.info(f"Client {username} authenticated successfully")
                     return username
                 else:
@@ -128,6 +144,8 @@ class ChatServer:
 
                 if only_message.strip().upper() == "EXIT":
                     self.logger.info(f"EXIT command received from {self.usernames.get(client, 'Unknown User')}")
+                    # avisar a los demas clientes que alguien se fue
+                    self.broadcast(f"{self.usernames.get(client, 'Unknown User')} ha abandonado el chat.".encode('utf-8'), exclude_client=client)
                     break
                 else:
                     self.messages.append(message.encode('utf-8'))
@@ -164,7 +182,7 @@ class ChatServer:
                 
                 username = self.authenticate_client(client)
                 if not username:
-                    continue  # Skip the client if authentication failed
+                    continue  # skip cliente si la auth falla
 
                 with self.lock:
                     self.usernames[client] = username
@@ -195,7 +213,3 @@ if __name__ == '__main__':
     chat_server.logger.info(f"Using Firestore: {args.usedb}")
     chat_server.receive()
 
-
-# TODO ipv6 getaddrinfo lado del server
-# QUEUES? concurrecia
-# autenticacion
